@@ -138,7 +138,6 @@ int serial_hdlc_tx(struct USART_Type* usart, const uint8_t* bufp, size_t size) {
 	return 0;
 }
 
-#define STB_SPRINTF_STATIC
 #define STB_SPRINTF_MIN 32
 #define STB_SPRINTF_NOFLOAT
 #define STB_SPRINTF_IMPLEMENTATION
