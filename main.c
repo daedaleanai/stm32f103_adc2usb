@@ -387,12 +387,10 @@ int main(void) {
   ADC1.CR2 |= ADC_CR2_ADON; // up & go.
   ADC2.CR2 |= ADC_CR2_ADON; // up & go.
 
-  DMA1_Channel1.CCR =
-      (2 << 10) | (2 << 8) | DMA_CCR1_MINC | DMA_CCR2_CIRC | DMA_CCR1_TCIE;
-  DMA1_Channel1.CPAR = (uint32_t)&ADC1.DR;
-  DMA1_Channel1.CMAR = (uint32_t)&adcdata[0];
-  DMA1_Channel1.CNDTR =
-      ((ADC1.SQR1 >> 20) & 0xf) + 1; // number of conversions in scan
+  DMA1_Channel1.CCR   = (2 << 10) | (2 << 8) | DMA_CCR1_MINC | DMA_CCR2_CIRC | DMA_CCR1_TCIE;
+  DMA1_Channel1.CPAR  = (uint32_t)&ADC1.DR;
+  DMA1_Channel1.CMAR  = (uint32_t)&adcdata[0];
+  DMA1_Channel1.CNDTR = ((ADC1.SQR1 >> 20) & 0xf) + 1; // number of conversions in scan
   DMA1_Channel1.CCR |= DMA_CCR1_EN;
   NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
@@ -437,14 +435,19 @@ int main(void) {
       led0_on();
     }
 
+    // convert to mV with vref
+
     if (usb_active) {
       char buf[64];
       size_t len = 0;
       len += stbsp_snprintf(buf + len, sizeof(buf) - len, "%lli", adccount);
+      uint32_t vref = jadcdata[1];
+      if (vref == 0) vref = 1200 * 4096 / 3300;
       for (int i = 0; i < nconv; i++) {
-        len +=
-            stbsp_snprintf(buf + len, sizeof(buf) - len, " %4d %4d",
-                           (int)(adcdata[i] & 0xfff), (int)(adcdata[i] >> 16));
+        uint32_t v0 = (adcdata[i] & 0xfff) * 1200 / vref;
+        uint32_t v1 = (adcdata[i] >> 16) * 1200 / vref;
+
+        len += stbsp_snprintf(buf + len, sizeof(buf) - len, " %4d %4d", v0, v1);
       }
       len += stbsp_snprintf(buf + len, sizeof(buf) - len, "\n");
 
@@ -458,7 +461,7 @@ int main(void) {
       int t1 = 2500 + 1000 * (jadcdata[0] - 1775) / 53;
       int t2 = t1 / 100;
       t1 %= 100;
-      serial_printf(&USART1, "# Temp: %d.%02d ℃ Vref: %d mV\n", t2, t1, jadcdata[1] * 3300 / 4096);
+      serial_printf(&USART1, "# Temp: %d.%02d ℃ Vref: %d [lsb]\n", t2, t1, jadcdata[1]);
     }
 
     IWDG.KR = 0xAAAA; // kick the watchdog
