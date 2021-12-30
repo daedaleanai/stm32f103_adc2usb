@@ -126,6 +126,7 @@ static const struct usb_device_descriptor dev = {
     .bNumConfigurations = 1,
 };
 
+#if 0
 /*
  * This notification endpoint isn't implemented. According to CDC spec its
  * optional, but its absence causes a NULL pointer dereference in Linux
@@ -139,6 +140,7 @@ static const struct usb_endpoint_descriptor comm_endp[] = {{
     .wMaxPacketSize = 16,
     .bInterval = 255,
 }};
+#endif
 
 static const struct usb_endpoint_descriptor data_endp[] = {
     {
@@ -160,7 +162,7 @@ static const struct usb_endpoint_descriptor data_endp[] = {
 
 static const struct {
   struct usb_cdc_header_descriptor header;
-  struct usb_cdc_call_management_descriptor call_mgmt;
+//  struct usb_cdc_call_management_descriptor call_mgmt;
   struct usb_cdc_acm_descriptor acm;
   struct usb_cdc_union_descriptor cdc_union;
 } __attribute__((packed)) cdcacm_functional_descriptors = {
@@ -171,15 +173,15 @@ static const struct {
             .bDescriptorSubtype = USB_CDC_TYPE_HEADER,
             .bcdCDC = 0x0110,
         },
-    .call_mgmt =
-        {
-            .bFunctionLength =
-                sizeof(struct usb_cdc_call_management_descriptor),
-            .bDescriptorType = CS_INTERFACE,
-            .bDescriptorSubtype = USB_CDC_TYPE_CALL_MANAGEMENT,
-            .bmCapabilities = 0,
-            .bDataInterface = 1,
-        },
+    // .call_mgmt =
+    //     {
+    //         .bFunctionLength =
+    //             sizeof(struct usb_cdc_call_management_descriptor),
+    //         .bDescriptorType = CS_INTERFACE,
+    //         .bDescriptorSubtype = USB_CDC_TYPE_CALL_MANAGEMENT,
+    //         .bmCapabilities = 0,
+    //         .bDataInterface = 1,
+    //     },
     .acm =
         {
             .bFunctionLength = sizeof(struct usb_cdc_acm_descriptor),
@@ -200,12 +202,14 @@ static const struct usb_interface_descriptor comm_iface[] = {
      .bDescriptorType = USB_DT_INTERFACE,
      .bInterfaceNumber = 0,
      .bAlternateSetting = 0,
-     .bNumEndpoints = 1,
+//     .bNumEndpoints = 1,
+     .bNumEndpoints = 0,
      .bInterfaceClass = USB_CLASS_CDC,
      .bInterfaceSubClass = USB_CDC_SUBCLASS_ACM,
-     .bInterfaceProtocol = USB_CDC_PROTOCOL_AT,
+//     .bInterfaceProtocol = USB_CDC_PROTOCOL_AT,
+     .bInterfaceProtocol = USB_CDC_PROTOCOL_NONE,
      .iInterface = 0,
-     .endpoint = comm_endp,
+//     .endpoint = comm_endp,
      .extra = &cdcacm_functional_descriptors,
      .extralen = sizeof(cdcacm_functional_descriptors)}};
 
