@@ -8,6 +8,9 @@
 #include "printf.h"
 #include "usb.h"
 
+// defined in stb_printf, which we changed to emit these
+extern int stbsp_snprintf( char * buf, int count, char const * fmt, ...) __attribute__((format(printf, 3, 4)));
+
 /*
     STM32F013CB (LQFP48/LQFP48) Pin Assignments:
 
@@ -71,6 +74,11 @@ static inline void led0_toggle(void) { digitalToggle(LED0_PIN); }
 
 static struct Ringbuffer usart1tx;
 
+void          USART1_IRQ_Handler(void) { usart_irq_handler(&USART1, &usart1tx); }
+static size_t u1puts(const char* buf, size_t len) { return usart_puts(&USART1, &usart1tx, buf, len); }
+static size_t usb_puts(const char* buf, size_t len) { return usb_send(buf, len); }
+
+
 static volatile uint64_t adctrig = 0; // time last ADC trigger
 static volatile uint64_t adcdone = 0; // time of last DMA transfer completion
 static volatile uint64_t adccount = 0;
@@ -108,196 +116,13 @@ void TIM3_IRQ_Handler(void) {
   TIM3.SR &= ~TIM_SR_UIF;
 }
 
-static const struct usb_device_descriptor dev = {
-    .bLength = USB_DT_DEVICE_SIZE,
-    .bDescriptorType = USB_DT_DEVICE,
-    .bcdUSB = 0x0200,
-    .bDeviceClass = USB_CLASS_CDC,
-    .bDeviceSubClass = 0,
-    .bDeviceProtocol = 0,
-    .bMaxPacketSize0 = 64,
-    .idVendor = 0x0483,
-    .idProduct = 0x5740,
-    .bcdDevice = 0x0200,
-    .iManufacturer = 1,
-    .iProduct = 2,
-    .iSerialNumber = 3,
-    .bNumConfigurations = 1,
-};
-
-#if 0
-/*
- * This notification endpoint isn't implemented. According to CDC spec its
- * optional, but its absence causes a NULL pointer dereference in Linux
- * cdc_acm driver.
- */
-static const struct usb_endpoint_descriptor comm_endp[] = {{
-    .bLength = USB_DT_ENDPOINT_SIZE,
-    .bDescriptorType = USB_DT_ENDPOINT,
-    .bEndpointAddress = 0x83,
-    .bmAttributes = USB_ENDPOINT_ATTR_INTERRUPT,
-    .wMaxPacketSize = 16,
-    .bInterval = 255,
-}};
-#endif
-
-static const struct usb_endpoint_descriptor data_endp[] = {
-    {
-        .bLength = USB_DT_ENDPOINT_SIZE,
-        .bDescriptorType = USB_DT_ENDPOINT,
-        .bEndpointAddress = 0x01,
-        .bmAttributes = USB_ENDPOINT_ATTR_BULK,
-        .wMaxPacketSize = 64,
-        .bInterval = 1,
-    },
-    {
-        .bLength = USB_DT_ENDPOINT_SIZE,
-        .bDescriptorType = USB_DT_ENDPOINT,
-        .bEndpointAddress = 0x82,
-        .bmAttributes = USB_ENDPOINT_ATTR_BULK,
-        .wMaxPacketSize = 64,
-        .bInterval = 1,
-    }};
-
-static const struct {
-  struct usb_cdc_header_descriptor header;
-//  struct usb_cdc_call_management_descriptor call_mgmt;
-  struct usb_cdc_acm_descriptor acm;
-  struct usb_cdc_union_descriptor cdc_union;
-} __attribute__((packed)) cdcacm_functional_descriptors = {
-    .header =
-        {
-            .bFunctionLength = sizeof(struct usb_cdc_header_descriptor),
-            .bDescriptorType = CS_INTERFACE,
-            .bDescriptorSubtype = USB_CDC_TYPE_HEADER,
-            .bcdCDC = 0x0110,
-        },
-    // .call_mgmt =
-    //     {
-    //         .bFunctionLength =
-    //             sizeof(struct usb_cdc_call_management_descriptor),
-    //         .bDescriptorType = CS_INTERFACE,
-    //         .bDescriptorSubtype = USB_CDC_TYPE_CALL_MANAGEMENT,
-    //         .bmCapabilities = 0,
-    //         .bDataInterface = 1,
-    //     },
-    .acm =
-        {
-            .bFunctionLength = sizeof(struct usb_cdc_acm_descriptor),
-            .bDescriptorType = CS_INTERFACE,
-            .bDescriptorSubtype = USB_CDC_TYPE_ACM,
-            .bmCapabilities = 0,
-        },
-    .cdc_union = {
-        .bFunctionLength = sizeof(struct usb_cdc_union_descriptor),
-        .bDescriptorType = CS_INTERFACE,
-        .bDescriptorSubtype = USB_CDC_TYPE_UNION,
-        .bControlInterface = 0,
-        .bSubordinateInterface0 = 1,
-    }};
-
-static const struct usb_interface_descriptor comm_iface[] = {
-    {.bLength = USB_DT_INTERFACE_SIZE,
-     .bDescriptorType = USB_DT_INTERFACE,
-     .bInterfaceNumber = 0,
-     .bAlternateSetting = 0,
-//     .bNumEndpoints = 1,
-     .bNumEndpoints = 0,
-     .bInterfaceClass = USB_CLASS_CDC,
-     .bInterfaceSubClass = USB_CDC_SUBCLASS_ACM,
-//     .bInterfaceProtocol = USB_CDC_PROTOCOL_AT,
-     .bInterfaceProtocol = USB_CDC_PROTOCOL_NONE,
-     .iInterface = 0,
-//     .endpoint = comm_endp,
-     .extra = &cdcacm_functional_descriptors,
-     .extralen = sizeof(cdcacm_functional_descriptors)}};
-
-static const struct usb_interface_descriptor data_iface[] = {{
-    .bLength = USB_DT_INTERFACE_SIZE,
-    .bDescriptorType = USB_DT_INTERFACE,
-    .bInterfaceNumber = 1,
-    .bAlternateSetting = 0,
-    .bNumEndpoints = 2,
-    .bInterfaceClass = USB_CLASS_DATA,
-    .bInterfaceSubClass = 0,
-    .bInterfaceProtocol = 0,
-    .iInterface = 0,
-    .endpoint = data_endp,
-}};
-
-static const struct usb_interface ifaces[] = {{
-                                                  .num_altsetting = 1,
-                                                  .altsetting = comm_iface,
-                                              },
-                                              {
-                                                  .num_altsetting = 1,
-                                                  .altsetting = data_iface,
-                                              }};
-
-static const struct usb_config_descriptor config = {
-    .bLength = USB_DT_CONFIGURATION_SIZE,
-    .bDescriptorType = USB_DT_CONFIGURATION,
-    .wTotalLength = 0,
-    .bNumInterfaces = 2,
-    .bConfigurationValue = 1,
-    .iConfiguration = 0,
-    .bmAttributes = 0x80,
-    .bMaxPower = 0x32,
-    .interface = ifaces,
-};
-
-static const char *usb_strings[] = {
-    "Daedalean",
-    "ADC2USB",
-    "ADC",
-};
-
-static usbd_device *usbdev;
-uint8_t usbd_control_buffer[128]; // Buffer to be used for control requests.
-uint16_t usb_active = 0;
-
-void USB_LP_CAN1_RX0_IRQ_Handler(void) { usbd_poll(usbdev); }
-
-static int cdcacm_control_request(
-    usbd_device *usbd_dev, struct usb_setup_data *req, uint8_t **buf,
-    uint16_t *len,
-    void (**complete)(usbd_device *usbd_dev, struct usb_setup_data *req)) {
-  (void)complete;
-  (void)buf;
-  (void)usbd_dev;
-
-  switch (req->bRequest) {
-  case USB_CDC_REQ_SET_LINE_CODING:
-    if (*len < sizeof(struct usb_cdc_line_coding))
-      break;
-    // fallthrough
-  case USB_CDC_REQ_SET_CONTROL_LINE_STATE:
-    return USBD_REQ_HANDLED;
-  }
-  return USBD_REQ_NOTSUPP;;
-}
-
 // echo incoming string to console, TODO: do sth more useful
-static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep) {
-  (void)ep;
-  char buf[64];
-  int len = usbd_ep_read_packet(usbd_dev, 0x01, buf, 64);
-  if (len) {
-    serial_printf(&USART1, "ep%d: %*s\n", ep, len, buf);
-//  usbd_ep_write_packet(usbdev, 0x82, buf, len);
+void USB_LP_CAN1_RX0_IRQ_Handler(void) {
+  uint8_t buf[64];
+  size_t  len = usb_recv(buf, sizeof buf);
+  if (len > 0) {
+          cbprintf(u1puts, "received %i: %*s\n", len, len, buf);
   }
-}
-
-static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue) {
-  usb_active = wValue;
-
-  usbd_ep_setup(usbd_dev, 0x01, USB_ENDPOINT_ATTR_BULK, 64, cdcacm_data_rx_cb);
-  usbd_ep_setup(usbd_dev, 0x82, USB_ENDPOINT_ATTR_BULK, 64, NULL);
-  usbd_ep_setup(usbd_dev, 0x83, USB_ENDPOINT_ATTR_INTERRUPT, 16, NULL);
-
-  usbd_register_control_callback(
-      usbd_dev, USB_REQ_TYPE_CLASS | USB_REQ_TYPE_INTERFACE,
-      USB_REQ_TYPE_TYPE | USB_REQ_TYPE_RECIPIENT, cdcacm_control_request);
 }
 
 int main(void) {
@@ -333,22 +158,18 @@ int main(void) {
 
   led0_off();
 
-  serial_init(&USART1, 921600, &usart1tx);
+  usart_init(&USART1, 921600);
 
-  serial_printf(&USART1, "ADC2USB:%s\n", __REVISION__);
-  serial_printf(&USART1, "CPUID:%08lx\n", SCB.CPUID);
-  serial_printf(&USART1, "DEVID:%08lx:%08lx:%08lx\n", UNIQUE_DEVICE_ID[2],
-                UNIQUE_DEVICE_ID[1], UNIQUE_DEVICE_ID[0]);
-  serial_printf(&USART1, "RESET:%02x%s%s%s%s%s%s\n", rf,
+  cbprintf(u1puts, "ADC2USB:%s\n", __REVISION__);
+  cbprintf(u1puts, "CPUID:%08lx\n", SCB.CPUID);
+  cbprintf(u1puts, "DEVID:%08lx:%08lx:%08lx\n", UNIQUE_DEVICE_ID[2], UNIQUE_DEVICE_ID[1], UNIQUE_DEVICE_ID[0]);
+  cbprintf(u1puts, "RESET:%02x%s%s%s%s%s%s\n", rf,
                 rf & 0x80 ? " LPWR" : "", rf & 0x40 ? " WWDG" : "",
                 rf & 0x20 ? " IWDG" : "", rf & 0x10 ? " SFT" : "",
                 rf & 0x08 ? " POR" : "", rf & 0x04 ? " PIN" : "");
-  serial_wait(&USART1);
+  usart_wait(&USART1);
 
-  usbdev = usbd_init(&st_usbfs_v1_usb_driver, &dev, &config, usb_strings,
-                     sizeof(usb_strings) / sizeof(usb_strings[0]),
-                     usbd_control_buffer, sizeof(usbd_control_buffer));
-  usbd_register_set_config_callback(usbdev, cdcacm_set_config);
+  usb_init();
 
   NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);
 
@@ -421,7 +242,7 @@ int main(void) {
   for (;;) {
     __enable_irq();
 
-    serial_wait(&USART1);
+    usart_wait(&USART1);
 
     __WFI(); // wait for interrupt to change the state of any of the subsystems
     __disable_irq();
@@ -434,27 +255,28 @@ int main(void) {
 
     // if this loop ran too slowly compared to TIM3 and the ADC, we'll notice here
     if (skip > 1) {
-      serial_printf(&USART1, "### skipped %lld\n", skip);
+      cbprintf(u1puts, "### skipped %lld\n", skip);
       led0_on();
     }
 
-    // convert to mV with vref
 
-    if (usb_active) {
+    if (usb_state() == USB_CONFIGURED) {
       char buf[64];
       size_t len = 0;
       len += stbsp_snprintf(buf + len, sizeof(buf) - len, "%lli", adccount);
+
+      // convert to mV with vref
       uint32_t vref = jadcdata[1];
       if (vref == 0) vref = 1200 * 4096 / 3300;
       for (int i = 0; i < nconv; i++) {
         uint32_t v0 = (adcdata[i] & 0xfff) * 1200 / vref;
         uint32_t v1 = (adcdata[i] >> 16) * 1200 / vref;
 
-        len += stbsp_snprintf(buf + len, sizeof(buf) - len, " %4d %4d", v0, v1);
+        len += stbsp_snprintf(buf + len, sizeof(buf) - len, " %4ld %4ld", v0, v1);
       }
       len += stbsp_snprintf(buf + len, sizeof(buf) - len, "\n");
 
-      usbd_ep_write_packet(usbdev, 0x82, buf, len);
+      usb_send(buf, len);
     }
 
     if ((adccount % 10) == 0) {
@@ -464,7 +286,11 @@ int main(void) {
       int t1 = 2500 + 1000 * (jadcdata[0] - 1775) / 53;
       int t2 = t1 / 100;
       t1 %= 100;
-      serial_printf(&USART1, "# Temp: %d.%02d ℃ Vref: %d [lsb]\n", t2, t1, jadcdata[1]);
+      cbprintf(u1puts, "# Temp: %d.%02d ℃ Vref: %d [lsb]\n", t2, t1, jadcdata[1]);
+
+      // TODO: this sometimes skips if the usb_send above is still busy.  
+      // implement a usb_wait function like usart_wait to drain the usb tx.
+      cbprintf(usb_puts, "# Temp: %d.%02d ℃ Vref: %d [lsb]\n", t2, t1, jadcdata[1]);
     }
 
     IWDG.KR = 0xAAAA; // kick the watchdog

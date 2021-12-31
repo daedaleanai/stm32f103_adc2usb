@@ -20,7 +20,7 @@ size_t ringbuffer_puts(struct Ringbuffer *rb, const char *buf, size_t len) {
     return len;
 }
 
-#define STB_SPRINTF_STATIC
+// #define STB_SPRINTF_STATIC  we need snprintf in main
 #define STB_SPRINTF_MIN 64
 #define STB_SPRINTF_NOFLOAT
 #define STB_SPRINTF_IMPLEMENTATION
