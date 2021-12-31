@@ -60,6 +60,8 @@ depend:
 boot.o: stm32f103_md.h core_cm3.h
 clock.o: stm32f103_md.h core_cm3.h clock.h
 gpio2.o: gpio2.h stm32f103_md.h core_cm3.h
-main.o: stm32f103_md.h core_cm3.h clock.h gpio2.h serial.h usb/usbd.h usb/usbstd.h
-serial.o: serial.h stm32f103_md.h core_cm3.h stb_sprintf.h
+main.o: stm32f103_md.h core_cm3.h clock.h gpio2.h usart.h printf.h usb.h
+printf.o: printf.h stb_sprintf.h
+usart.o: usart.h stm32f103_md.h core_cm3.h printf.h
+usb.o: usb.h stm32f103usb.h
 vectors.o: stm32f103_md.h core_cm3.h

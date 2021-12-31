@@ -4,10 +4,9 @@
 
 #include "clock.h"
 #include "gpio2.h"
-#include "serial.h"
-#include "stb_sprintf.h"
-#include "usb/cdc.h"
-#include "usb/usbd.h"
+#include "usart.h"
+#include "printf.h"
+#include "usb.h"
 
 /*
     STM32F013CB (LQFP48/LQFP48) Pin Assignments:
