@@ -283,9 +283,12 @@ int main(void) {
             t1 %= 100;
             cbprintf(u1puts, "# Temp: %d.%02d ℃ Vref: %d [lsb]\n", t2, t1, jadcdata[1]);
 
-            // TODO: this sometimes skips if the usb_send above is still busy.
+            // TODO: the usb_puts below sometimes skips if the usb_send above is still busy.
             // implement a usb_wait function like usart_wait to drain the usb tx.
+            __enable_irq();
             delay(500); // for now just wait half a millisecond
+            __disable_irq();
+
             cbprintf(usb_puts, "# Temp: %d.%02d ℃ Vref: %d [lsb]\n", t2, t1, jadcdata[1]);
         }
 
