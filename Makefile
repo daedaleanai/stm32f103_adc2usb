@@ -4,14 +4,14 @@ CC          := $(PREFIX)gcc
 OBJCOPY     := $(PREFIX)objcopy
 SIZE        := $(PREFIX)size
 
-REVISION := $(shell git log -1 --format="%h")
+REVISION := $(shell git log -1 --format="%h" || echo "(NOREV)")
 
-ARCH_FLAGS	 = -mthumb -mcpu=cortex-m3
-LTO_FLAGS	 = -O2 -flto -fuse-linker-plugin -ffunction-sections -fdata-sections -fverbose-asm -ffat-lto-objects
-WARN_FLAGS   	 = -Werror -Wfatal-errors -Wall -Wextra -Wunsafe-loop-optimizations -Wdouble-promotion -Wundef  -Wno-pedantic
-DEBUG_FLAGS	 = -ggdb3 -DNDEBUG -D__REVISION__='"$(REVISION)"' 
-CFLAGS 		 = -std=gnu99 $(ARCH_FLAGS) $(LTO_FLAGS) $(WARN_FLAGS) $(DEBUG_FLAGS)
-LDFLAGS		 = -nostartfiles -lnosys -static $(ARCH_FLAGS) $(LTO_FLAGS) $(WARN_FLAGS) $(DEBUG_FLAGS) -Wl,-gc-sections,-Map,main.map -Wl,--cref
+ARCH_FLAGS	= -mthumb -mcpu=cortex-m3
+LTO_FLAGS	= -O2 -flto -fuse-linker-plugin -ffunction-sections -fdata-sections -fverbose-asm -ffat-lto-objects
+WARN_FLAGS	= -Werror -Wfatal-errors -Wall -Wextra -Wunsafe-loop-optimizations -Wdouble-promotion -Wundef  -Wno-pedantic
+DEBUG_FLAGS	= -ggdb3 -DNDEBUG -D__REVISION__='"$(REVISION)"' 
+CFLAGS		= -std=gnu99 $(ARCH_FLAGS) $(LTO_FLAGS) $(WARN_FLAGS) $(DEBUG_FLAGS)
+LDFLAGS		= -nostartfiles -lnosys -static $(ARCH_FLAGS) $(LTO_FLAGS) $(WARN_FLAGS) $(DEBUG_FLAGS) -Wl,-gc-sections,-Map,main.map -Wl,--cref
 
 .DEFAULT_GOAL := main.hex
 
@@ -22,11 +22,9 @@ OBJS = \
 	boot.o \
 	clock.o \
 	gpio2.o \
-	serial.o \
-	usb/st_usbfs.o \
-	usb/usb_standard.o \
-	usb/usb_control.o \
-	usb/usb.o \
+	usart.o \
+	usb.o \
+	printf.o \
 	main.o \
 
 $(OBJS): Makefile
