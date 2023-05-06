@@ -1,4 +1,8 @@
 /*
+ *  ADC convert channel 0-9 on PA0:7 and PB0:1 at 10Hz and print voltage in millivolts on the usb device.
+ *  the voltage conversion takes into account vref, which is sampled along.
+ *  as a bonus, on TIM4 CH1..4 (PB6:9) outputs a 1KHz PWM signal with a duty cycle between 0 and 100% for ADC0..3 between 0 and 3.3V.
+ *
  */
 #include "stm32f103_md.h"
 
@@ -19,22 +23,29 @@ extern int stbsp_snprintf(char* buf, int count, char const* fmt, ...) __attribut
     PA0:7 ADC 0:7      in    Analog         Analog input 0-7
     PB0:1 ADC 8:9      in    Analog         Analog input 8,9
 
-    PA9   USART1 TX    out   AF_PP 10MHz
+    PA9   USART1 TX    out   AF_PP 50MHz
     PA10  USART1 RX    in    PullUp
     PA11  USB D-       automatic
     PA12  USB D+       automatic
     PA13  SWDIO        in/out               ST-Link programmer
     PA14  SWCLK        in/out               ST-Link programmer
 
+    PB6   TIM4 CH1     out   AF_PP 10MHz    1Khz pwm out (ADC0)
+    PB7   TIM4 CH2     out   AF_PP 10MHz    1Khz pwm out (ADC0)
+    PB8   TIM4 CH3     out   AF_PP 10MHz    1Khz pwm out (ADC0)
+    PB9   TIM4 CH4     out   AF_PP 10MHz    1Khz pwm out (ADC0)
+
+
     PC13  LED0         out   OUT_OD 2MHz    On-board yellow LED
 */
 
 /* clang-format off */
 enum {
-  ADC0_7_PIN    = PA0 | PA1 | PA2 | PA3 | PA4 | PA5 | PA6 | PA7,
-  ADC8_9_PIN    = PB0 | PB1,
-	USART1_TX_PIN = PA9,
+    ADC0_7_PIN    = PA0 | PA1 | PA2 | PA3 | PA4 | PA5 | PA6 | PA7,
+    ADC8_9_PIN    = PB0 | PB1,
+    USART1_TX_PIN = PA9,
 	USART1_RX_PIN = PA10,
+    TIM4CHx_PIN   = PB6 | PB7 | PB8 | PB9,
 	LED0_PIN      = PC13,
 };
 
@@ -49,6 +60,7 @@ static struct gpio_config_t {
     {ADC8_9_PIN, Mode_INA},    
     {USART1_TX_PIN, Mode_AF_PP_50MHz},
     {USART1_RX_PIN, Mode_IPU},
+    {TIM4CHx_PIN, Mode_AF_PP_10MHz},  // TODO or opendrain and invert?
     {LED0_PIN, Mode_Out_OD_2MHz},
     {0, 0}, // sentinel
 };
@@ -91,6 +103,12 @@ void DMA1_Channel1_IRQ_Handler(void) {
     adcdone = cycleCount();
     ++adccount;
     DMA1.IFCR = DMA_ISR_TCIF1;
+
+    // copy adc data channel 0..3 to TIM4 ch1..3 PWM value.
+    TIM4.CCR1 = adcdata[0];
+    TIM4.CCR2 = adcdata[0] >> 16;
+    TIM4.CCR3 = adcdata[1];
+    TIM4.CCR4 = adcdata[2] >> 16;
 }
 
 // injected conversion done
@@ -139,7 +157,7 @@ int main(void) {
     RCC.APB2ENR |= RCC_APB2ENR_USART1EN;
     RCC.APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_IOPCEN;
     RCC.APB2ENR |= RCC_APB2ENR_ADC1EN | RCC_APB2ENR_ADC2EN;
-    RCC.APB1ENR |= RCC_APB1ENR_TIM3EN | RCC_APB1ENR_USBEN;
+    RCC.APB1ENR |= RCC_APB1ENR_TIM3EN |RCC_APB1ENR_TIM4EN | RCC_APB1ENR_USBEN;
     RCC.AHBENR |= RCC_AHBENR_DMA1EN;
     RCC.CFGR |= RCC_CFGR_ADCPRE_DIV6; // ADC clock 72/6 MHz = 12 Mhz, must be < 14MHz
 
@@ -220,6 +238,14 @@ int main(void) {
     TIM3.CR2 |= (2 << 4); // TRGO is update event
     TIM3.CR1 |= TIM_CR1_CEN;
     NVIC_EnableIRQ(TIM3_IRQn);
+
+    // enable TIM4 for PWM out
+    TIM4.PSC = 18 - 1;   // 72MHz / 18 = 4MHz
+    TIM4.ARR = 4096 - 1; // 4MHz/4096 = 976.5625 Hz (1024ms cycle)
+    TIM4.CCMR1 = (6<< 12) | (6 << 4); // CH1, 2 in PWM1 mode
+    TIM4.CCMR2 = (6<< 12) | (6 << 4); // CH1, 2 in PWM1 mode
+    TIM4.CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
+    TIM4.CR1 |= TIM_CR1_CEN;
 
     // ADC/DMA errors will cause the watchdog to cease being triggered
     // Initialize the independent watchdog
