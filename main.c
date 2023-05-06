@@ -157,7 +157,7 @@ int main(void) {
     RCC.APB2ENR |= RCC_APB2ENR_USART1EN;
     RCC.APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_IOPCEN;
     RCC.APB2ENR |= RCC_APB2ENR_ADC1EN | RCC_APB2ENR_ADC2EN;
-    RCC.APB1ENR |= RCC_APB1ENR_TIM3EN |RCC_APB1ENR_TIM4EN | RCC_APB1ENR_USBEN;
+    RCC.APB1ENR |= RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN | RCC_APB1ENR_USBEN;
     RCC.AHBENR |= RCC_AHBENR_DMA1EN;
     RCC.CFGR |= RCC_CFGR_ADCPRE_DIV6; // ADC clock 72/6 MHz = 12 Mhz, must be < 14MHz
 
@@ -240,11 +240,11 @@ int main(void) {
     NVIC_EnableIRQ(TIM3_IRQn);
 
     // enable TIM4 for PWM out
-    TIM4.PSC = 18 - 1;   // 72MHz / 18 = 4MHz
-    TIM4.ARR = 4096 - 1; // 4MHz/4096 = 976.5625 Hz (1024ms cycle)
-    TIM4.CCMR1 = (6<< 12) | (6 << 4); // CH1, 2 in PWM1 mode
-    TIM4.CCMR2 = (6<< 12) | (6 << 4); // CH1, 2 in PWM1 mode
-    TIM4.CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
+    TIM4.PSC   = 18 - 1;               // 72MHz / 18 = 4MHz
+    TIM4.ARR   = 4096 - 1;             // 4MHz/4096 = 976.5625 Hz (1024ms cycle)
+    TIM4.CCMR1 = (6 << 12) | (6 << 4); // CH1, 2 in PWM1 mode
+    TIM4.CCMR2 = (6 << 12) | (6 << 4); // CH1, 2 in PWM1 mode
+    TIM4.CCER  = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
     TIM4.CR1 |= TIM_CR1_CEN;
 
     // ADC/DMA errors will cause the watchdog to cease being triggered
