@@ -44,9 +44,9 @@ enum {
     ADC0_7_PIN    = PA0 | PA1 | PA2 | PA3 | PA4 | PA5 | PA6 | PA7,
     ADC8_9_PIN    = PB0 | PB1,
     USART1_TX_PIN = PA9,
-	USART1_RX_PIN = PA10,
+    USART1_RX_PIN = PA10,
     TIM4CHx_PIN   = PB6 | PB7 | PB8 | PB9,
-	LED0_PIN      = PC13,
+    LED0_PIN      = PC13,
 };
 
 static struct gpio_config_t {
